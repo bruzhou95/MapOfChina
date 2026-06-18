@@ -119,7 +119,11 @@
 
         <div class="section">
             <h2>步骤 2: 预览数据</h2>
-            <label for="preview">数据预览：</label>
+            <div id="columnInfo" style="display: none;">
+                <p><strong>检测到的列名：</strong></p>
+                <div id="columnNames" style="background: #f0f0f0; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 12px;"></div>
+            </div>
+            <label for="preview">数据预览（前 5 行）：</label>
             <textarea id="preview" readonly placeholder="上传文件后，数据将在这里显示..."></textarea>
         </div>
 
@@ -182,12 +186,39 @@
                     const sheet = workbook.Sheets[sheetName];
                     excelData = XLSX.utils.sheet_to_json(sheet);
 
-                    // Show preview
-                    const preview = JSON.stringify(excelData.slice(0, 5), null, 2);
-                    document.getElementById('preview').value = preview + '\n\n... (共 ' + excelData.length + ' 条记录)';
+                    if (excelData.length === 0) {
+                        showMessage('error', '✗ 文件为空，请检查 Excel 内容');
+                        return;
+                    }
 
-                    showMessage('success', '✓ 文件上传成功！共读取 ' + excelData.length + ' 条记录');
+                    // Get column names
+                    const columnNames = Object.keys(excelData[0]);
+                    console.log('Detected columns:', columnNames);
+                    
+                    // Display column names
+                    const columnInfo = document.getElementById('columnInfo');
+                    const columnNamesDiv = document.getElementById('columnNames');
+                    columnNamesDiv.innerHTML = columnNames.map(col => `<div>• ${col}</div>`).join('');
+                    columnInfo.style.display = 'block';
+
+                    // Show preview with actual data - show values in all columns
+                    let previewText = '';
+                    for (let i = 0; i < Math.min(5, excelData.length); i++) {
+                        previewText += `行 ${i + 1}: `;
+                        columnNames.forEach(col => {
+                            const val = excelData[i][col];
+                            if (val !== undefined && val !== null && val !== '') {
+                                previewText += `${col}="${val}" `;
+                            }
+                        });
+                        previewText += '\n';
+                    }
+                    previewText += '\n... (共 ' + excelData.length + ' 条记录)';
+                    document.getElementById('preview').value = previewText;
+
+                    showMessage('success', '✓ 文件上传成功！共读取 ' + excelData.length + ' 条记录，检测到 ' + columnNames.length + ' 列');
                 } catch (error) {
+                    console.error('Error:', error);
                     showMessage('error', '✗ 读取文件失败: ' + error.message);
                 }
             };
@@ -202,49 +233,91 @@
                 return;
             }
 
+            // Detect column names more intelligently
+            const firstRow = excelData[0];
+            const allColumns = Object.keys(firstRow);
+            
+            // Find province column index (header or data column near "一级行政区划")
+            let provinceColIdx = -1;
+            let cityColIdx = -1;
+            let countyColIdx = -1;
+
+            allColumns.forEach((col, idx) => {
+                if (col.includes('一级')) provinceColIdx = idx;
+                if (col.includes('二级')) cityColIdx = idx;
+                if (col.includes('三级')) countyColIdx = idx;
+            });
+
+            // If headers found, look for data in next columns
+            if (provinceColIdx >= 0 && allColumns[provinceColIdx + 1]) provinceColIdx++;
+            if (cityColIdx >= 0 && allColumns[cityColIdx + 1]) cityColIdx++;
+            if (countyColIdx >= 0 && allColumns[countyColIdx + 1]) countyColIdx++;
+
+            // Fallback: use any non-empty column
+            if (provinceColIdx < 0 || !firstRow[allColumns[provinceColIdx]]) {
+                provinceColIdx = allColumns.findIndex(col => firstRow[col] && firstRow[col].toString().trim());
+            }
+
+            console.log('Detected columns (indices):', { province: provinceColIdx, city: cityColIdx, county: countyColIdx });
+            console.log('Column names:', allColumns);
+            console.log('First row sample:', Object.entries(firstRow).slice(0, 5));
+
+            if (provinceColIdx < 0) {
+                showMessage('error', '✗ 未找到数据列。请检查 Excel 文件结构。');
+                return;
+            }
+
+            const provinceCol = allColumns[provinceColIdx];
+            const cityCol = cityColIdx >= 0 ? allColumns[cityColIdx] : null;
+            const countyCol = countyColIdx >= 0 ? allColumns[countyColIdx] : null;
+
             const regionsMap = {};
+            let successCount = 0;
 
             excelData.forEach((row, index) => {
-                // Adjust column names based on your Excel structure
-                const province = row['省份'] || row['省'] || row['一级行政区'];
-                const city = row['城市'] || row['市'] || row['二级行政区'];
-                const county = row['县级'] || row['县'] || row['三级行政区'];
+                const province = row[provinceCol];
+                const city = cityCol ? row[cityCol] : null;
+                const county = countyCol ? row[countyCol] : null;
 
-                if (province) {
-                    const provinceId = province.replace(/\s+/g, '');
+                if (province && String(province).trim()) {
+                    const provinceId = String(province).trim().replace(/\s+/g, '');
                     if (!regionsMap[provinceId]) {
                         regionsMap[provinceId] = {
-                            name: province,
+                            name: String(province).trim(),
                             type: 'province',
-                            cities: {},
-                            original: row
+                            cities: {}
                         };
                     }
 
-                    if (city) {
-                        const cityId = city.replace(/\s+/g, '');
+                    if (city && String(city).trim()) {
+                        const cityId = String(city).trim().replace(/\s+/g, '');
                         if (!regionsMap[provinceId].cities[cityId]) {
                             regionsMap[provinceId].cities[cityId] = {
-                                name: city,
+                                name: String(city).trim(),
                                 type: 'city',
-                                counties: [],
-                                original: row
+                                counties: []
                             };
                         }
 
-                        if (county) {
-                            const countyId = county.replace(/\s+/g, '');
+                        if (county && String(county).trim()) {
+                            const countyId = String(county).trim().replace(/\s+/g, '');
                             if (!regionsMap[provinceId].cities[cityId].counties.find(c => c.id === countyId)) {
                                 regionsMap[provinceId].cities[cityId].counties.push({
                                     id: countyId,
-                                    name: county,
+                                    name: String(county).trim(),
                                     type: 'county'
                                 });
                             }
                         }
                     }
+                    successCount++;
                 }
             });
+
+            if (Object.keys(regionsMap).length === 0) {
+                showMessage('error', '✗ 转换失败，未获取到任何数据。使用列: ' + provinceCol + ', ' + cityCol + ', ' + countyCol);
+                return;
+            }
 
             const output = `// China Regions Data
 // Auto-generated from Excel file
@@ -268,7 +341,7 @@ ${Object.entries(province.cities).map(([cityId, city]) => {
 console.log('China regions data loaded. Total provinces: ' + Object.keys(window.chinaCities).length);`;
 
             document.getElementById('output').value = output;
-            showMessage('success', '✓ 转换成功！');
+            showMessage('success', '✓ 转换成功！共处理 ' + successCount + ' 行，提取 ' + Object.keys(regionsMap).length + ' 个省份');
         }
 
         function downloadJson() {

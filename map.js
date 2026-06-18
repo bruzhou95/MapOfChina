@@ -1,21 +1,41 @@
 // Main map application
 class ChinaMap {
     constructor() {
+        console.log('ChinaMap constructor called');
         this.mapContainer = document.getElementById('mapSvgContainer');
+        console.log('mapContainer found:', this.mapContainer ? 'YES' : 'NO');
         this.currentZoom = 1;
         this.svgLoaded = false;
         this.regionsIndex = {};
+        this.isPanning = false;
+        this.panStartX = 0;
+        this.panStartY = 0;
+        this.offsetX = 0;
+        this.offsetY = 0;
         this.init();
     }
 
     async init() {
+        console.log('ChinaMap init() called');
         this.setupEventListeners();
+        console.log('Event listeners setup done');
+        
+        // Restore sidebar state
+        const sidebarHidden = localStorage.getItem('sidebarHidden') === 'true';
+        if (sidebarHidden) {
+            document.querySelector('.content').classList.add('sidebar-hidden');
+        }
+        
         await this.loadMap();
+        console.log('loadMap() completed');
         this.updateUI();
+        console.log('UI updated');
     }
 
     setupEventListeners() {
         // Control buttons
+        document.getElementById('resetZoomBtn').addEventListener('click', () => this.resetZoom());
+        document.getElementById('toggleSidebarBtn').addEventListener('click', () => this.toggleSidebar());
         document.getElementById('clearAllBtn').addEventListener('click', () => this.clearAll());
         document.getElementById('exportBtn').addEventListener('click', () => this.exportData());
         document.getElementById('importBtn').addEventListener('click', () => {
@@ -27,18 +47,157 @@ class ChinaMap {
         document.getElementById('filterProvince').addEventListener('change', () => this.updateMapView());
         document.getElementById('filterCity').addEventListener('change', () => this.updateMapView());
         document.getElementById('filterCounty').addEventListener('change', () => this.updateMapView());
+
+        // Drag to pan when zoomed
+        this.mapContainer.addEventListener('mousedown', (e) => this.startPan(e));
+        this.mapContainer.addEventListener('mousemove', (e) => this.pan(e));
+        this.mapContainer.addEventListener('mouseup', () => this.endPan());
+        this.mapContainer.addEventListener('mouseleave', () => this.endPan());
+    }
+
+    setupZoomListener() {
+        // Attach wheel listener after SVG is loaded
+        this.mapContainer.addEventListener('wheel', (e) => this.handleZoom(e), { passive: false });
+    }
+
+    fitMapToContainer() {
+        const svg = this.mapContainer.querySelector('svg');
+        if (!svg) return;
+
+        // Get container dimensions
+        const containerWidth = this.mapContainer.clientWidth;
+        const containerHeight = this.mapContainer.clientHeight;
+
+        // Use SVG's width/height attributes
+        const svgWidth = 1801;  // From SVG width attribute
+        const svgHeight = 1924.75;  // From SVG height attribute
+
+        console.log('Container:', containerWidth, 'x', containerHeight);
+        console.log('SVG:', svgWidth, 'x', svgHeight);
+
+        // Calculate what zoom is needed to fit, then increase it for better visibility
+        const maxZoomX = containerWidth / svgWidth;
+        const maxZoomY = containerHeight / svgHeight;
+        const fitZoom = Math.min(maxZoomX, maxZoomY) * 1.5; // Reduced to 1.0 for smaller map on load
+
+        // Calculate offsets
+        const scaledWidth = svgWidth * fitZoom;
+        const scaledHeight = svgHeight * fitZoom;
+        
+        // Center horizontally, offset vertically to show top part of map (northwest China)
+        const offsetX = (containerWidth - scaledWidth) / 2 + 150; // Add 150px to shift right
+        const offsetY = 550; // Offset to show top part of map
+
+        this.currentZoom = fitZoom;
+        this.offsetX = offsetX;
+        this.offsetY = offsetY;
+
+        console.log('Calculated Zoom:', fitZoom, 'Offset:', offsetX, offsetY);
+
+        svg.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.currentZoom})`;
+        svg.style.transformOrigin = 'top left';
+        svg.style.transition = 'transform 0.3s ease-out';
+    }
+
+    handleZoom(event) {
+        event.preventDefault();
+        
+        // Determine zoom direction
+        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1; // Scroll down = zoom out, scroll up = zoom in
+        this.currentZoom *= zoomFactor;
+        
+        // Limit zoom levels (0.5x to 3x)
+        this.currentZoom = Math.max(0.5, Math.min(3, this.currentZoom));
+        
+        // Apply zoom to SVG with offset
+        const svg = this.mapContainer.querySelector('svg');
+        if (svg) {
+            svg.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.currentZoom})`;
+            svg.style.transformOrigin = 'top left';
+            svg.style.transition = 'transform 0.1s ease-out';
+        }
+    }
+
+    resetZoom() {
+        this.currentZoom = 1;
+        this.offsetX = 0;
+        this.offsetY = 0;
+        const svg = this.mapContainer.querySelector('svg');
+        if (svg) {
+            svg.style.transform = 'translate(0, 0) scale(1)';
+            svg.style.transition = 'transform 0.3s ease-out';
+        }
+    }
+
+    startPan(event) {
+        if (event.button !== 0) return; // Only left mouse button
+        
+        this.isPanning = true;
+        this.panStartX = event.clientX;
+        this.panStartY = event.clientY;
+    }
+
+    pan(event) {
+        if (!this.isPanning) return;
+        
+        const deltaX = event.clientX - this.panStartX;
+        const deltaY = event.clientY - this.panStartY;
+        
+        // Update offset - works at any zoom level
+        this.offsetX += deltaX;
+        this.offsetY += deltaY;
+        
+        // Update pan start position for next move
+        this.panStartX = event.clientX;
+        this.panStartY = event.clientY;
+        
+        // Apply transform
+        const svg = this.mapContainer.querySelector('svg');
+        if (svg) {
+            svg.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.currentZoom})`;
+            svg.style.transition = 'none';
+        }
+    }
+
+    endPan() {
+        this.isPanning = false;
+    }
+
+    toggleSidebar() {
+        const content = document.querySelector('.content');
+        content.classList.toggle('sidebar-hidden');
+        
+        // Save preference to localStorage
+        const isHidden = content.classList.contains('sidebar-hidden');
+        localStorage.setItem('sidebarHidden', isHidden);
+        console.log('Sidebar toggled, hidden:', isHidden);
     }
 
     async loadMap() {
         try {
-            // First, try to load a pre-converted SVG
+            console.log('Starting to load SVG from: china-map.svg');
             const response = await fetch('china-map.svg');
+            console.log('Fetch response status:', response.status, response.statusText);
+            
             if (response.ok) {
                 const svgText = await response.text();
+                console.log('SVG text length:', svgText.length);
+                console.log('SVG first 200 chars:', svgText.substring(0, 200));
+                
+                if (!svgText || svgText.length === 0) {
+                    console.error('SVG file is empty!');
+                    this.createPlaceholderMap();
+                    return;
+                }
+                
                 this.mapContainer.innerHTML = svgText;
                 this.svgLoaded = true;
+                console.log('SVG injected into container');
+                this.setupZoomListener();
+                this.fitMapToContainer();
                 this.setupMapInteractions();
             } else {
+                console.error('Failed to load SVG, status:', response.status);
                 this.createPlaceholderMap();
             }
         } catch (error) {

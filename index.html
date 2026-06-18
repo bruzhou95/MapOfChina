@@ -33,10 +33,13 @@
                         <!-- SVG map will be loaded here -->
                     </div>
                 </div>
-
+                <button id="toggleSidebarBtn" class="toggle-sidebar-btn" title="隐藏/显示侧边栏">
+                    <span>◀</span>
+                </button>
                 <aside class="sidebar">
                     <div class="controls">
                         <h2>控制面板</h2>
+                        <button id="resetZoomBtn" class="btn btn-info">重置缩放</button>
                         <button id="clearAllBtn" class="btn btn-danger">清除所有记录</button>
                         <button id="exportBtn" class="btn btn-primary">导出记录</button>
                         <button id="importBtn" class="btn btn-secondary">导入记录</button>
@@ -78,5 +81,18 @@
     <script src="china-regions-data.js"></script>
     <script src="data.js"></script>
     <script src="map.js"></script>
+    <script>
+        // Initialize the map when DOM is ready
+        console.log('index.html script block executing');
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('DOM ready, creating ChinaMap instance');
+                window.map = new ChinaMap();
+            });
+        } else {
+            console.log('DOM already loaded, creating ChinaMap instance');
+            window.map = new ChinaMap();
+        }
+    </script>
 </body>
 </html>
