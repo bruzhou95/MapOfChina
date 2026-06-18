@@ -79,61 +79,6 @@
             gap: 10px;
             flex-wrap: wrap;
         }
-        .path-list {
-            background: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 10px;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .path-item {
-            background: white;
-            padding: 8px;
-            margin-bottom: 6px;
-            border-left: 3px solid #667eea;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 3px;
-        }
-        .path-item:hover {
-            background: #f0f4ff;
-        }
-        .path-item input {
-            margin: 0 !important;
-            padding: 4px !important;
-            width: 150px;
-            font-size: 11px !important;
-        }
-        .path-id-current {
-            color: #999;
-            font-size: 11px;
-        }
-        .path-item.auto-detected {
-            border-left-color: #4caf50;
-        }
-        .path-item.manual-required {
-            border-left-color: #ff9800;
-            background: #fff8f0;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
-            margin-left: 8px;
-        }
-        .status-badge.auto {
-            background: #c8e6c9;
-            color: #2e7d32;
-        }
-        .status-badge.manual {
-            background: #ffe0b2;
-            color: #e65100;
-        }
         .success {
             background: #e8f5e9;
             border-left: 4px solid #4caf50;
@@ -164,48 +109,17 @@
         <h1>🔧 SVG ID 编辑工具</h1>
         
         <div class="info">
-            此工具帮助您为 SVG 文件中的路径添加 ID 属性，使其在地图中可被点击和识别。
-            <br><strong>工作流程：</strong>
-            1. 上传 SVG 文件 → 系统自动从路径名称中提取 6 位数字作为 ID
-            2. 对于没有 6 位数字的路径，需要手动输入 ID
-            3. 检查所有 ID 是否正确
-            4. 点击"应用更改"和"下载修改后的 SVG"
+            工作流程：1. 上传 SVG 文件 → 2. 上传层级 CSV → 3. 写入层级并下载
         </div>
 
         <div style="grid-column: 1 / -1;">
             <h2>📂 第 1 步：上传 SVG 文件</h2>
             <label for="svgFile">选择 SVG 文件：</label>
             <input type="file" id="svgFile" accept=".svg" />
-        </div>
-
-        <div>
-            <h2>🔍 第 2 步：识别路径</h2>
-            <p>上传后，这里会显示找到的所有路径。</p>
             <div id="message"></div>
-            <div class="path-list" id="pathList">
-                <p style="color: #999; text-align: center; padding: 20px;">
-                    上传 SVG 文件后，路径列表将显示在此
-                </p>
-            </div>
         </div>
 
-        <div>
-            <h2>✏️ 第 3 步：编辑 ID</h2>
-            <p>选择路径并输入对应的 ID（英文名称，如 beijing）</p>
-            <div id="editPanel" style="display: none;">
-                <label>路径名称：<span id="selectedPathName"></span></label>
-                <input type="text" id="newIdInput" placeholder="输入新的 ID（如：beijing）">
-                <div class="button-group">
-                    <button onclick="setSelectedId()">设置 ID</button>
-                    <button onclick="clearSelectedId()">清除 ID</button>
-                </div>
-            </div>
-            <p style="color: #999; font-size: 12px;">
-                提示：ID 应该是英文或数字，不能包含空格或特殊字符
-            </p>
-        </div>
-
-        <div>
+        <div style="grid-column: 1 / -1;">
             <h2>👁️ 预览</h2>
             <button onclick="previewSvg()">刷新预览</button>
             <div id="preview">
@@ -218,7 +132,7 @@
         </div>
 
         <div style="grid-column: 1 / -1;">
-            <h2>� 第 4 步：上传行政层级 CSV</h2>
+            <h2>📋 第 2 步：上传行政层级 CSV</h2>
             <p style="font-size:13px;color:#555;">上传包含 <strong>level 3 (省) / level 2 (市) / level 1 (县)</strong> 三列的 CSV 文件。
             系统将自动填充空白单元格、建立父子关系，并将层级信息写入 SVG。</p>
             <label for="csvFile">选择层级 CSV 文件：</label>
@@ -231,7 +145,7 @@
         </div>
 
         <div style="grid-column: 1 / -1;">
-            <h2>💾 第 5 步：完成</h2>
+            <h2>💾 第 3 步：完成</h2>
             <div class="button-group">
                 <button onclick="applySvg()" style="background: #4caf50;">✓ 应用更改</button>
                 <button onclick="downloadSvg()" style="background: #2196F3;">⬇️ 下载修改后的 SVG</button>
@@ -249,15 +163,6 @@
     <script>
         let svgContent = '';
         let svgDoc = null;
-        let selectedPathElement = null;
-        let pathMap = new Map();
-
-        // Extract 6-digit number from string
-        function extractSixDigits(str) {
-            if (!str) return null;
-            const match = str.match(/\d{6}/);
-            return match ? match[0] : null;
-        }
 
         document.getElementById('svgFile').addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -276,161 +181,15 @@
                     }
 
                     document.getElementById('svgCode').value = svgContent;
-                    loadPaths();
-                    showSuccess(`成功加载 SVG 文件。找到 ${pathMap.size} 条路径。`);
+                    const count = svgDoc.querySelectorAll('path, polygon, circle, rect').length;
+                    showSuccess(`✓ 成功加载 SVG 文件，共 ${count} 条路径。`);
+                    previewSvg();
                 } catch (error) {
                     showError('读取文件失败: ' + error.message);
                 }
             };
             reader.readAsText(file);
         });
-
-        function loadPaths() {
-            pathMap.clear();
-            const paths = svgDoc.querySelectorAll('path, polygon, circle, rect');
-            let index = 0;
-
-            paths.forEach(path => {
-                const originalId = path.getAttribute('id') || `path_${index++}`;
-                const sixDigits = extractSixDigits(originalId);
-                
-                // If 6 digits found, auto-set as ID; otherwise keep original for manual edit
-                const suggestedId = sixDigits;
-                const hasAutoId = !!sixDigits;
-                
-                pathMap.set(originalId, { 
-                    element: path, 
-                    index: index,
-                    suggestedId: suggestedId,
-                    hasAutoId: hasAutoId,
-                    displayName: originalId
-                });
-            });
-
-            renderPathList();
-        }
-
-        function renderPathList() {
-            const pathList = document.getElementById('pathList');
-            if (pathMap.size === 0) {
-                pathList.innerHTML = '<p style="color: #999; text-align: center;">未找到任何路径</p>';
-                return;
-            }
-
-            let html = '';
-            let index = 1;
-            pathMap.forEach((info, id) => {
-                const currentId = info.element.getAttribute('id');
-                const statusClass = info.hasAutoId ? 'auto-detected' : 'manual-required';
-                const statusBadge = info.hasAutoId ? 
-                    '<span class="status-badge auto">✓ 自动检测</span>' : 
-                    '<span class="status-badge manual">⚠ 需手动设置</span>';
-                
-                html += `
-                    <div class="path-item ${statusClass}" onclick="selectPath('${id}')">
-                        <div>
-                            <div><strong>#${index}${currentId ? ' - ' + currentId : ''}</strong>${statusBadge}</div>
-                            <div class="path-id-current">${id}</div>
-                        </div>
-                        <input type="text" 
-                               value="${info.suggestedId || ''}" 
-                               placeholder="输入 ID..." 
-                               onclick="event.stopPropagation()" 
-                               data-path-id="${id}" 
-                               class="path-input" />
-                    </div>
-                `;
-                index++;
-            });
-
-            pathList.innerHTML = html;
-
-            // Add event listeners
-            document.querySelectorAll('.path-input').forEach(input => {
-                input.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        const pathId = input.getAttribute('data-path-id');
-                        const newId = input.value.trim();
-                        if (newId) {
-                            setPathId(pathId, newId);
-                            renderPathList();
-                        }
-                    }
-                });
-                
-                // Also allow clicking to apply
-                input.addEventListener('blur', () => {
-                    const pathId = input.getAttribute('data-path-id');
-                    const newId = input.value.trim();
-                    if (newId) {
-                        const info = pathMap.get(pathId);
-                        if (info && info.suggestedId !== newId) {
-                            setPathId(pathId, newId);
-                            renderPathList();
-                        }
-                    }
-                });
-            });
-        }
-
-        function selectPath(pathId) {
-            selectedPathElement = pathMap.get(pathId);
-            document.getElementById('selectedPathName').textContent = pathId;
-            document.getElementById('editPanel').style.display = 'block';
-            const suggestedId = selectedPathElement.suggestedId || '';
-            document.getElementById('newIdInput').value = suggestedId;
-            document.getElementById('newIdInput').focus();
-        }
-
-        function setSelectedId() {
-            if (!selectedPathElement) return;
-            
-            const newId = document.getElementById('newIdInput').value.trim();
-            if (!newId) {
-                showError('请输入有效的 ID');
-                return;
-            }
-
-            // Validate ID
-            if (!/^[a-zA-Z0-9_]+$/.test(newId)) {
-                showError('ID 只能包含英文字母、数字和下划线');
-                return;
-            }
-
-            const pathIds = Array.from(pathMap.keys());
-            const index = Array.from(pathMap.values()).indexOf(selectedPathElement);
-            selectedPathElement.element.setAttribute('id', newId);
-            
-            const oldId = pathIds[index];
-            const info = pathMap.get(oldId);
-            pathMap.delete(oldId);
-            pathMap.set(newId, info);
-
-            renderPathList();
-            showSuccess(`✓ ID 已设置为: ${newId}`);
-        }
-
-        function setPathId(pathId, newId) {
-            const info = pathMap.get(pathId);
-            if (!info) return;
-
-            if (!/^[a-zA-Z0-9_]+$/.test(newId)) {
-                showError('ID 只能包含英文字母、数字和下划线');
-                return;
-            }
-
-            info.element.setAttribute('id', newId);
-            pathMap.delete(pathId);
-            pathMap.set(newId, info);
-            showSuccess(`✓ ID 已设置为: ${newId}`);
-        }
-
-        function clearSelectedId() {
-            if (!selectedPathElement) return;
-            selectedPathElement.element.removeAttribute('id');
-            loadPaths();
-            showSuccess('✓ ID 已清除');
-        }
 
         function applySvg() {
             try {
@@ -443,11 +202,7 @@
         }
 
         function downloadSvg() {
-            if (!svgContent) {
-                showError('请先上传 SVG 文件');
-                return;
-            }
-
+            if (!svgContent) { showError('请先上传 SVG 文件'); return; }
             const blob = new Blob([svgContent], { type: 'image/svg+xml' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -457,27 +212,27 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
             showSuccess('✓ SVG 文件已下载！');
         }
 
         function previewSvg() {
             if (!svgContent) return;
-            const preview = document.getElementById('preview');
-            preview.innerHTML = svgContent;
+            document.getElementById('preview').innerHTML = svgContent;
         }
 
         function resetAll() {
             if (confirm('确定要重置所有更改吗？')) {
-                pathMap.clear();
                 svgContent = '';
                 svgDoc = null;
-                selectedPathElement = null;
+                hierarchyData = null;
                 document.getElementById('svgFile').value = '';
+                document.getElementById('csvFile').value = '';
                 document.getElementById('svgCode').value = '';
-                document.getElementById('pathList').innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">上传 SVG 文件后，路径列表将显示在此</p>';
                 document.getElementById('preview').innerHTML = '<svg style="width: 100%; height: 100%;"><text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="#999">SVG 预览将显示在此</text></svg>';
                 document.getElementById('message').innerHTML = '';
+                document.getElementById('csvStatus').innerHTML = '';
+                document.getElementById('hierarchyStats').textContent = '';
+                document.getElementById('hierarchyButtons').style.display = 'none';
             }
         }
 
@@ -579,31 +334,22 @@
                 const code = m[1];
 
                 if (provinceCodes.has(code)) {
-                    const newId = code + '-3';
-                    path.setAttribute('id', newId);
                     path.setAttribute('data-level', '3');
                     path.removeAttribute('data-parent');
-                    renameInPathMap(currentId, newId, path);
                     provinces++;
 
                 } else if (cityCodes.has(code)) {
-                    const newId = code + '-2';
-                    path.setAttribute('id', newId);
                     path.setAttribute('data-level', '2');
                     const parentCode = cityToProvince[code];
-                    if (parentCode) path.setAttribute('data-parent', parentCode + '-3');
+                    if (parentCode) path.setAttribute('data-parent', parentCode);
                     else            path.removeAttribute('data-parent');
-                    renameInPathMap(currentId, newId, path);
                     cities++;
 
                 } else if (countyCodes.has(code)) {
-                    const newId = code; // no suffix for counties
-                    path.setAttribute('id', newId);
                     path.setAttribute('data-level', '1');
                     const parentCode = countyToCity[code];
-                    if (parentCode) path.setAttribute('data-parent', parentCode + '-2');
+                    if (parentCode) path.setAttribute('data-parent', parentCode);
                     else            path.removeAttribute('data-parent');
-                    if (currentId !== newId) renameInPathMap(currentId, newId, path);
                     counties++;
 
                 } else {
@@ -611,7 +357,7 @@
                 }
             });
 
-            // Embed compact hierarchy JSON in <metadata id="hierarchy">
+            // Embed hierarchy JSON in <metadata id="hierarchy"> using raw 6-digit codes
             let metadata = svgDoc.querySelector('metadata#hierarchy');
             if (!metadata) {
                 metadata = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'metadata');
@@ -619,27 +365,11 @@
                 const svgEl = svgDoc.querySelector('svg');
                 svgEl.insertBefore(metadata, svgEl.firstChild);
             }
-            // Store with suffixes already applied so map.js can use IDs directly
-            metadata.textContent = JSON.stringify({
-                countyToCity: Object.fromEntries(
-                    Object.entries(countyToCity).map(([k, v]) => [k, v + '-2'])
-                ),
-                cityToProvince: Object.fromEntries(
-                    Object.entries(cityToProvince).map(([k, v]) => [k + '-2', v + '-3'])
-                )
-            });
+            metadata.textContent = JSON.stringify({ countyToCity, cityToProvince });
 
             applySvg();
-            renderPathList();
+            previewSvg();
             showSuccess(`✓ 层级已写入 SVG：${provinces} 省，${cities} 市，${counties} 县/区（${unmatched} 个未匹配路径）`);
-        }
-
-        function renameInPathMap(oldId, newId, element) {
-            if (oldId === newId || !pathMap.has(oldId)) return;
-            const info = pathMap.get(oldId);
-            info.displayName = newId;
-            pathMap.delete(oldId);
-            pathMap.set(newId, info);
         }
     </script>
 </body>

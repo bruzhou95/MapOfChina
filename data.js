@@ -164,7 +164,10 @@ class MapData {
             else if (gov === 2) cities++;
             else counties++;
         });
-        return { provinces, cities, counties };
+        const totalProvinces = new Set(Object.values(this.cityToProvince)).size;
+        const totalCities = Object.keys(this.cityToProvince).length;
+        const totalCounties = Object.keys(this.countyToCity).length;
+        return { provinces, cities, counties, totalProvinces, totalCities, totalCounties };
     }
 
     getVisitedList() {

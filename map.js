@@ -44,6 +44,32 @@ class ChinaMap {
         });
         document.getElementById('importFile').addEventListener('change', (e) => this.importData(e));
 
+        // Search
+        const searchInput = document.getElementById('regionSearchInput');
+        searchInput.addEventListener('input', () => this.handleSearch(searchInput.value));
+        searchInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') { searchInput.value = ''; this.handleSearch(''); } });
+
+        // Unvisited filter buttons
+        document.querySelectorAll('.uv-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.uv-filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.updateUnvisitedList();
+            });
+        });
+
+        // Toggle unvisited panel
+        const toggleUnvisited = document.getElementById('toggleUnvisitedBtn');
+        if (toggleUnvisited) {
+            const content = document.querySelector('.content');
+            const isHidden = localStorage.getItem('unvisitedHidden') === 'true';
+            if (isHidden) content.classList.add('unvisited-hidden');
+            toggleUnvisited.addEventListener('click', () => {
+                content.classList.toggle('unvisited-hidden');
+                localStorage.setItem('unvisitedHidden', content.classList.contains('unvisited-hidden'));
+            });
+        }
+
         // Drag to pan when zoomed
         this.mapContainer.addEventListener('mousedown', (e) => this.startPan(e));
         this.mapContainer.addEventListener('mousemove', (e) => this.pan(e));
@@ -307,7 +333,7 @@ class ChinaMap {
 
                 // Store ALL paths per ID (SVG often has duplicate IDs for fill + border layers)
                 if (!this.regionsIndex[regionId]) this.regionsIndex[regionId] = [];
-                this.regionsIndex[regionId].push(path);
+                if (path) this.regionsIndex[regionId].push(path);
 
                 // Restore visual state if already visited
                 if (mapData.isVisited(regionId)) {
@@ -467,6 +493,95 @@ class ChinaMap {
         this.updateRegionVisual(pathElement, 0);
     }
 
+    // ── Search ────────────────────────────────────────────────────────────
+
+    getDisplayName(regionId) {
+        const baseId = mapData.getBaseId(regionId);
+        const names = window.regionNames || {};
+        // Direct lookup (province or city)
+        if (names[baseId]) return names[baseId];
+        // For counties: return code + parent city name
+        const parentId = mapData.getParentId(regionId);
+        if (parentId) {
+            const parentBase = mapData.getBaseId(parentId);
+            const parentName = names[parentBase] || parentBase;
+            return `${parentName}-${baseId}`;
+        }
+        return baseId;
+    }
+
+    handleSearch(query) {
+        const resultsEl = document.getElementById('searchResults');
+        query = query.trim();
+        if (!query) { resultsEl.innerHTML = ''; return; }
+
+        const names = window.regionNames || {};
+        const q = query.toLowerCase();
+        const govLabels = { 1: '县', 2: '市', 3: '省' };
+        const matches = [];
+
+        // Search provinces & cities by name (from regionNames) + counties by parent name or code
+        const allIds = Object.keys(map.regionsIndex);
+        for (const regionId of allIds) {
+            const baseId = mapData.getBaseId(regionId);
+            const govLevel = mapData.getGovernanceLevel(regionId);
+            const directName = names[baseId] || '';
+            const displayName = this.getDisplayName(regionId);
+
+            const matchesQuery =
+                directName.includes(query) ||
+                displayName.includes(query) ||
+                baseId.includes(q) ||
+                regionId.includes(q);
+
+            if (matchesQuery) {
+                matches.push({ regionId, displayName, govLevel });
+                if (matches.length >= 30) break;
+            }
+        }
+
+        // Sort: provinces first, then cities, then counties
+        matches.sort((a, b) => b.govLevel - a.govLevel || a.displayName.localeCompare(b.displayName));
+
+        if (matches.length === 0) {
+            resultsEl.innerHTML = '<div class="search-empty">无结果</div>';
+            return;
+        }
+
+        const html = matches.map(({ regionId, displayName, govLevel }) => {
+            const visited = mapData.isVisited(regionId);
+            return `<div class="search-result-item${visited ? ' visited' : ''}" data-id="${regionId}">
+                <span class="search-result-name">${displayName}</span>
+                <span class="search-result-level">${govLabels[govLevel]}</span>
+                ${visited ? '<span class="search-result-check">✓</span>' : ''}
+            </div>`;
+        }).join('');
+
+        resultsEl.innerHTML = html;
+        resultsEl.querySelectorAll('.search-result-item').forEach(el => {
+            el.addEventListener('click', () => this.toggleFromSearch(el.dataset.id, el));
+        });
+    }
+
+    toggleFromSearch(regionId, el) {
+        mapData.toggleVisit(regionId);
+        const isNow = mapData.isVisited(regionId);
+        this.propagateVisit(regionId, isNow);
+        // Update visual on map
+        this.updateRegionVisualAll(regionId, isNow ? mapData.getGovernanceLevel(regionId) : 0);
+        // Refresh result row
+        el.classList.toggle('visited', isNow);
+        const check = el.querySelector('.search-result-check');
+        if (isNow && !check) {
+            el.insertAdjacentHTML('beforeend', '<span class="search-result-check">✓</span>');
+        } else if (!isNow && check) {
+            check.remove();
+        }
+        this.updateUI();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     showRegionInfo(regionId, pathElement) {
         const regionName = mapData.getRegionName(regionId);
         const isVisited = mapData.isVisited(regionId);
@@ -530,14 +645,23 @@ class ChinaMap {
     }
 
     updateUI() {
-        // Update statistics
+        // Update statistics — compute totals from actual SVG paths to avoid double-counting
+        // Filter out non-region paths (e.g. guide lines that accidentally match the -3 suffix pattern)
         const stats = mapData.getStats();
-        document.getElementById('provinceCount').textContent = stats.provinces;
-        document.getElementById('cityCount').textContent = stats.cities;
-        document.getElementById('countyCount').textContent = stats.counties;
+        const isRealRegion = (id) => /^_\d{6}_/.test(id);
+        const totalProvinces = Object.keys(this.regionsIndex).filter(id => mapData.getGovernanceLevel(id) === 3 && isRealRegion(id)).length;
+        const totalCities    = Object.keys(this.regionsIndex).filter(id => mapData.getGovernanceLevel(id) === 2 && isRealRegion(id)).length;
+        const totalCounties  = Object.keys(this.regionsIndex).filter(id => mapData.getGovernanceLevel(id) === 1 && isRealRegion(id)).length;
+        const fmt = (n, total) => total > 0
+            ? `${n} / ${total} (${Math.round(n / total * 100)}%)`
+            : `${n}`;
+        document.getElementById('provinceCount').textContent = fmt(stats.provinces, totalProvinces);
+        document.getElementById('cityCount').textContent = fmt(stats.cities, totalCities);
+        document.getElementById('countyCount').textContent = fmt(stats.counties, totalCounties);
 
         // Update visited list
         this.updateVisitedList();
+        this.updateUnvisitedList();
     }
 
     updateVisitedList() {
@@ -591,13 +715,160 @@ class ChinaMap {
         });
     }
 
+    updateUnvisitedList() {
+        const content = document.getElementById('unvisitedListContent');
+        if (!content) return;
+
+        // Helper: extract Chinese name from ID like "_110000_北京市-3" → "北京市"
+        const extractName = (id) => {
+            const m = id.match(/^_\d+_(.+?)(?:-[23])?$/);
+            return m ? m[1] : mapData.getRegionName(id);
+        };
+
+        // Active filter level ('all', '3', '2', '1')
+        const activeFilter = (document.querySelector('.uv-filter-btn.active') || {}).dataset?.level || 'all';
+
+        // Get provinces from hierarchy maps that actually exist in the SVG
+        const allProvinces = Object.keys(mapData.provinceCities)
+            .filter(p => this.regionsIndex[p])
+            .sort((a, b) => extractName(a).localeCompare(extractName(b), 'zh'));
+
+        if (allProvinces.length === 0) {
+            content.innerHTML = '<p class="uv-empty">地图数据加载中...</p>';
+            return;
+        }
+
+        let html = '';
+
+        allProvinces.forEach(provId => {
+            const provVisited = mapData.isVisited(provId);
+            const cities = (mapData.provinceCities[provId] || []).filter(c => this.regionsIndex[c]);
+            const unvisitedCities = cities.filter(c => !mapData.isVisited(c));
+
+            // Skip province if everything is visited
+            if (provVisited && unvisitedCities.length === 0 && activeFilter === 'all') return;
+            if (activeFilter === '3' && provVisited) return;
+            if (activeFilter === '2' && unvisitedCities.length === 0) return;
+            if (activeFilter === '1') {
+                const hasUnvisitedCounty = cities.some(c =>
+                    (mapData.cityCounties[c] || []).filter(k => this.regionsIndex[k]).some(k => !mapData.isVisited(k))
+                );
+                if (!hasUnvisitedCounty) return;
+            }
+
+            const provName = extractName(provId);
+
+            if (activeFilter === '3') {
+                html += `<div class="uv-prov" data-id="${provId}" style="cursor:pointer">
+                    <span class="uv-name">${provName}</span>
+                </div>`;
+                return;
+            }
+
+            html += `<div class="uv-group">
+                <div class="uv-prov" data-id="${provId}">
+                    <span class="uv-arrow">▶</span>
+                    <span class="uv-name ${provVisited ? 'uv-visited' : ''}">${provName}</span>
+                    <span class="uv-badge">${activeFilter === '1' ? '' : unvisitedCities.length + '市'}</span>
+                </div>
+                <div class="uv-cities" hidden>`;
+
+            // For county filter, iterate ALL cities (propagation may have marked cities as visited
+            // even when they still have unvisited counties)
+            const citiesToShow = activeFilter === '1' ? cities : unvisitedCities;
+
+            citiesToShow.forEach(cityId => {
+                const counties = (mapData.cityCounties[cityId] || []).filter(c => this.regionsIndex[c]);
+                const unvisitedCounties = counties.filter(c => !mapData.isVisited(c));
+                const cityName = extractName(cityId);
+
+                if (activeFilter === '1') {
+                    if (unvisitedCounties.length === 0) return;
+                    // Show counties directly (no collapse)
+                    html += `<div class="uv-city-group">
+                        <div class="uv-city-label">${cityName}</div>
+                        <div class="uv-counties-open">`;
+                    unvisitedCounties.forEach(countyId => {
+                        html += `<div class="uv-county" data-id="${countyId}">${extractName(countyId)}</div>`;
+                    });
+                    html += `</div></div>`;
+                    return;
+                }
+
+                if (activeFilter === '2') {
+                    html += `<div class="uv-city" data-id="${cityId}" style="margin-left:0">
+                        <span class="uv-name">${cityName}</span>
+                        <span class="uv-badge">(${unvisitedCounties.length}县)</span>
+                    </div>`;
+                    return;
+                }
+
+                html += `<div class="uv-city-group">
+                    <div class="uv-city" data-id="${cityId}">
+                        <span class="uv-arrow">▶</span>
+                        <span class="uv-name">${cityName}</span>
+                        <span class="uv-badge">${unvisitedCounties.length}县</span>
+                    </div>
+                    <div class="uv-counties" hidden>`;
+                unvisitedCounties.forEach(countyId => {
+                    html += `<div class="uv-county" data-id="${countyId}">${extractName(countyId)}</div>`;
+                });
+                html += `</div></div>`;
+            });
+
+            html += `</div></div>`;
+        });
+
+        content.innerHTML = html || '<p class="uv-empty">🎉 所有地区已访问！</p>';
+
+        // Expand/collapse arrows
+        content.querySelectorAll('.uv-prov[data-id], .uv-city[data-id]').forEach(header => {
+            const arrow = header.querySelector('.uv-arrow');
+            if (!arrow) return;
+            arrow.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const sibling = header.nextElementSibling;
+                if (!sibling) return;
+                const hidden = sibling.hasAttribute('hidden');
+                if (hidden) { sibling.removeAttribute('hidden'); arrow.textContent = '▼'; }
+                else { sibling.setAttribute('hidden', ''); arrow.textContent = '▶'; }
+            });
+        });
+
+        // Click name to mark visited
+        content.querySelectorAll('.uv-name').forEach(nameEl => {
+            nameEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const header = nameEl.closest('[data-id]');
+                if (!header) return;
+                const regionId = header.getAttribute('data-id');
+                mapData.addVisit(regionId);
+                this.updateRegionVisualAll(regionId, mapData.getGovernanceLevel(regionId));
+                this.propagateVisit(regionId, true);
+                this.updateUI();
+            });
+        });
+
+        // Click county to mark visited
+        content.querySelectorAll('.uv-county[data-id]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const regionId = item.getAttribute('data-id');
+                mapData.addVisit(regionId);
+                this.updateRegionVisualAll(regionId, mapData.getGovernanceLevel(regionId));
+                this.propagateVisit(regionId, true);
+                this.updateUI();
+            });
+        });
+    }
+
     clearAll() {
         if (confirm('确定要清除所有记录吗？此操作无法撤销。')) {
             mapData.clearAll();
-            
-            // Reset visual state
-            Object.values(this.regionsIndex).forEach(path => {
-                this.markRegionUnvisited(path);
+
+            // Reset visual state for all registered paths
+            Object.values(this.regionsIndex).forEach(paths => {
+                paths.forEach(path => { if (path) this.markRegionUnvisited(path); });
             });
 
             this.updateUI();
@@ -626,8 +897,8 @@ class ChinaMap {
             const content = e.target?.result;
             if (typeof content === 'string' && mapData.importData(content)) {
                 // Reset visual states
-                Object.values(this.regionsIndex).forEach(path => {
-                    this.markRegionUnvisited(path);
+                Object.values(this.regionsIndex).forEach(paths => {
+                    paths.forEach(path => { if (path) this.markRegionUnvisited(path); });
                 });
 
                 // Update visual states for imported data

@@ -98,14 +98,14 @@ main {
     top: 50%;
     transform: translateY(-50%);
     z-index: 100;
-    width: 40px;
+    width: 20px;
     height: 60px;
     background: #667eea;
     color: white;
     border: none;
     border-radius: 4px 0 0 4px;
     cursor: pointer;
-    font-size: 18px;
+    font-size: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -129,6 +129,7 @@ main {
     background: #fafafa;
     border-left: 1px solid #e0e0e0;
     overflow-y: auto;
+    min-height: 0;
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -233,6 +234,90 @@ main {
     height: 16px;
 }
 
+/* ── Search Panel ─────────────────────────────────────────────────────── */
+.search-panel {
+    background: white;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+}
+
+#regionSearchInput {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#regionSearchInput:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+#searchResults {
+    margin-top: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.search-empty {
+    font-size: 12px;
+    color: #999;
+    padding: 6px 2px;
+}
+
+.search-result-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #333;
+    transition: background 0.15s;
+}
+
+.search-result-item:hover {
+    background: #f0f0ff;
+}
+
+.search-result-item.visited {
+    background: #eef0ff;
+    color: #5568d3;
+}
+
+.search-result-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-result-level {
+    font-size: 11px;
+    color: #aaa;
+    background: #f5f5f5;
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.search-result-item.visited .search-result-level {
+    background: #dde1ff;
+    color: #667eea;
+}
+
+.search-result-check {
+    color: #667eea;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
 .details {
     background: white;
     padding: 12px;
@@ -276,7 +361,6 @@ main {
     padding: 12px;
     border-radius: 6px;
     border: 1px solid #e0e0e0;
-    flex: 1;
     overflow-y: auto;
 }
 
@@ -384,6 +468,11 @@ svg path[data-level="3"] {
     pointer-events: none;
 }
 
+svg path.visited-level2,
+svg path.visited-level3 {
+    pointer-events: none;
+}
+
 svg path.visited-level1 {
     fill: #667eea;
     stroke: #5568d3;
@@ -415,6 +504,209 @@ svg path.visited-level3 {
 svg path.visited-level3:hover {
     fill: rgba(102, 126, 234, 0.42);
     stroke: #818cf8;
+}
+
+/* ── Unvisited Panel ────────────────────────────────────────────────── */
+.unvisited-panel {
+    display: flex;
+    flex-direction: row;
+    background: #fafafa;
+    border-left: 1px solid #e0e0e0;
+    min-height: 0;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.toggle-unvisited-btn {
+    width: 20px;
+    min-width: 20px;
+    background: #f56565;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.toggle-unvisited-btn:hover { background: #e53e3e; }
+
+.unvisited-body {
+    width: 260px;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: width 0.3s ease, padding 0.3s ease;
+    min-height: 0;
+}
+
+.content.unvisited-hidden .unvisited-body {
+    width: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.unvisited-panel h2 {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 0;
+    border-bottom: 2px solid #f56565;
+    padding-bottom: 8px;
+    white-space: nowrap;
+}
+
+.unvisited-filter {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.uv-filter-btn {
+    padding: 3px 10px;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    background: white;
+    font-size: 12px;
+    cursor: pointer;
+    color: #666;
+    transition: all 0.15s;
+}
+
+.uv-filter-btn.active {
+    background: #f56565;
+    border-color: #f56565;
+    color: white;
+}
+
+#unvisitedListContent {
+    font-size: 13px;
+    flex: 1;
+    min-height: 0;
+}
+
+.uv-empty {
+    color: #999;
+    font-size: 13px;
+}
+
+/* Province group */
+.uv-group {
+    margin-bottom: 4px;
+}
+
+.uv-prov {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 6px;
+    background: #fff0f0;
+    border-left: 3px solid #f56565;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.uv-prov:hover { background: #ffe0e0; }
+
+/* City group */
+.uv-cities {
+    margin-left: 10px;
+    margin-top: 2px;
+}
+
+.uv-city-group {
+    margin-bottom: 2px;
+}
+
+.uv-city {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px;
+    background: #fff8f0;
+    border-left: 3px solid #f6ad55;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.uv-city:hover { background: #feebc8; }
+
+/* County list */
+.uv-counties {
+    margin-left: 10px;
+    margin-top: 2px;
+}
+
+.uv-county {
+    padding: 3px 8px;
+    font-size: 12px;
+    color: #555;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.uv-county:hover {
+    background: #f0f4ff;
+    color: #667eea;
+}
+
+/* City label (non-interactive header for county filter view) */
+.uv-city-label {
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #f6ad55;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.uv-counties-open {
+    margin-left: 4px;
+}
+
+.uv-arrow {
+    font-size: 10px;
+    color: #aaa;
+    flex-shrink: 0;
+    width: 12px;
+    text-align: center;
+}
+
+.uv-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.uv-name:hover { text-decoration: underline; }
+
+.uv-name.uv-visited {
+    color: #aaa;
+    text-decoration: line-through;
+}
+
+.uv-badge {
+    font-size: 11px;
+    color: #aaa;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Responsive — hide unvisited panel on narrow screens */
+@media (max-width: 1400px) {
+    .unvisited-body { width: 200px; }
+}
+
+@media (max-width: 1100px) {
+    .unvisited-panel { display: none; }
 }
 
 /* Scrollbar Styling */
