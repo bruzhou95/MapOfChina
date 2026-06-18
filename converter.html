@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel 转 JSON 转换工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding-bottom: 25px;
+            border-bottom: 1px solid #eee;
+        }
+        .section:last-child {
+            border-bottom: none;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="file"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        textarea {
+            min-height: 300px;
+            resize: vertical;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #1565c0;
+        }
+        .success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            color: #2e7d32;
+        }
+        .error {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            color: #c62828;
+        }
+        .steps {
+            background: #fafafa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        .steps ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .steps li {
+            margin-bottom: 8px;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Excel 转 JSON 转换工具</h1>
+        
+        <div class="section">
+            <h2>步骤 1: 上传 Excel 文件</h2>
+            <div class="info">
+                上传您的 <code>中国一级至三级行政区划列表.xlsx</code> 文件。
+                该文件应包含列名：省份、城市、县级等信息。
+            </div>
+            <label for="excelFile">选择 Excel 文件：</label>
+            <input type="file" id="excelFile" accept=".xlsx,.xls" />
+        </div>
+
+        <div class="section">
+            <h2>步骤 2: 预览数据</h2>
+            <label for="preview">数据预览：</label>
+            <textarea id="preview" readonly placeholder="上传文件后，数据将在这里显示..."></textarea>
+        </div>
+
+        <div class="section">
+            <h2>步骤 3: 转换并下载</h2>
+            <div class="steps">
+                <strong>转换说明：</strong>
+                <ol>
+                    <li>点击下方 "转换为 JSON" 按钮</li>
+                    <li>检查生成的 JSON 数据</li>
+                    <li>点击 "下载 JSON" 保存文件为 <code>china-regions-data.js</code></li>
+                    <li>将该文件放在地图文件夹中</li>
+                </ol>
+            </div>
+            <button onclick="convertToJson()">转换为 JSON</button>
+            <button onclick="downloadJson()">下载 JSON</button>
+            <button onclick="copyToClipboard()">复制到剪贴板</button>
+        </div>
+
+        <div class="section">
+            <h2>步骤 4: 查看转换结果</h2>
+            <label for="output">转换后的 JSON：</label>
+            <textarea id="output" placeholder="转换后的 JSON 数据将在这里显示..."></textarea>
+        </div>
+
+        <div class="section" style="background: #f0f4ff; border-radius: 4px; padding: 15px;">
+            <h3>✅ 完成后的步骤</h3>
+            <ol>
+                <li>将下载的 <code>china-regions-data.js</code> 放到项目文件夹中</li>
+                <li>在 <code>index.html</code> 中添加 <code>&lt;script src="china-regions-data.js"&gt;&lt;/script&gt;</code></li>
+                <li>将您的 AI 文件导出为 SVG 格式，保存为 <code>china-map.svg</code></li>
+                <li>在浏览器中打开 <code>index.html</code> 即可使用</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let excelData = null;
+
+        document.getElementById('excelFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const workbook = XLSX.read(event.target.result, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    excelData = XLSX.utils.sheet_to_json(sheet);
+
+                    // Show preview
+                    const preview = JSON.stringify(excelData.slice(0, 5), null, 2);
+                    document.getElementById('preview').value = preview + '\n\n... (共 ' + excelData.length + ' 条记录)';
+
+                    showMessage('success', '✓ 文件上传成功！共读取 ' + excelData.length + ' 条记录');
+                } catch (error) {
+                    showMessage('error', '✗ 读取文件失败: ' + error.message);
+                }
+            };
+            reader.readAsBinaryString(file);
+        });
+
+        function convertToJson() {
+            if (!excelData || excelData.length === 0) {
+                showMessage('error', '✗ 请先上传 Excel 文件');
+                return;
+            }
+
+            const regionsMap = {};
+
+            excelData.forEach((row, index) => {
+                // Adjust column names based on your Excel structure
+                const province = row['省份'] || row['省'] || row['一级行政区'];
+                const city = row['城市'] || row['市'] || row['二级行政区'];
+                const county = row['县级'] || row['县'] || row['三级行政区'];
+
+                if (province) {
+                    const provinceId = province.replace(/\s+/g, '');
+                    if (!regionsMap[provinceId]) {
+                        regionsMap[provinceId] = {
+                            name: province,
+                            type: 'province',
+                            cities: {},
+                            original: row
+                        };
+                    }
+
+                    if (city) {
+                        const cityId = city.replace(/\s+/g, '');
+                        if (!regionsMap[provinceId].cities[cityId]) {
+                            regionsMap[provinceId].cities[cityId] = {
+                                name: city,
+                                type: 'city',
+                                counties: [],
+                                original: row
+                            };
+                        }
+
+                        if (county) {
+                            const countyId = county.replace(/\s+/g, '');
+                            if (!regionsMap[provinceId].cities[cityId].counties.find(c => c.id === countyId)) {
+                                regionsMap[provinceId].cities[cityId].counties.push({
+                                    id: countyId,
+                                    name: county,
+                                    type: 'county'
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+
+            const output = `// China Regions Data
+// Auto-generated from Excel file
+// Generated at: ${new Date().toISOString()}
+
+window.chinaCities = {
+${Object.entries(regionsMap).map(([id, province]) => {
+    return `    "${id}": {
+        name: "${province.name}",
+        type: "province",
+        cities: {
+${Object.entries(province.cities).map(([cityId, city]) => {
+    const counties = city.counties.map(c => `{ id: "${c.id}", name: "${c.name}" }`).join(', ');
+    return `            "${cityId}": { name: "${city.name}", type: "city", counties: [${counties}] }`;
+}).join(',\n')}
+        }
+    }`;
+}).join(',\n')}
+};
+
+console.log('China regions data loaded. Total provinces: ' + Object.keys(window.chinaCities).length);`;
+
+            document.getElementById('output').value = output;
+            showMessage('success', '✓ 转换成功！');
+        }
+
+        function downloadJson() {
+            const output = document.getElementById('output').value;
+            if (!output) {
+                showMessage('error', '✗ 请先进行转换');
+                return;
+            }
+
+            const blob = new Blob([output], { type: 'application/javascript' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'china-regions-data.js';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showMessage('success', '✓ 文件下载成功！');
+        }
+
+        function copyToClipboard() {
+            const output = document.getElementById('output');
+            if (!output.value) {
+                showMessage('error', '✗ 没有内容可复制');
+                return;
+            }
+
+            output.select();
+            document.execCommand('copy');
+            showMessage('success', '✓ 已复制到剪贴板');
+        }
+
+        function showMessage(type, message) {
+            const preview = document.getElementById('preview');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `info ${type}`;
+            messageDiv.textContent = message;
+            
+            preview.parentElement.insertBefore(messageDiv, preview);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

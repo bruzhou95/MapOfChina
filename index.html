@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中国地图 - 旅游记录</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>中国地图 - 旅游记录</h1>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="label">已访问省份：</span>
+                    <span class="value" id="provinceCount">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="label">已访问城市：</span>
+                    <span class="value" id="cityCount">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="label">已访问县级：</span>
+                    <span class="value" id="countyCount">0</span>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="content">
+                <div class="map-container">
+                    <div id="mapSvgContainer" class="map-svg-container">
+                        <!-- SVG map will be loaded here -->
+                    </div>
+                </div>
+
+                <aside class="sidebar">
+                    <div class="controls">
+                        <h2>控制面板</h2>
+                        <button id="clearAllBtn" class="btn btn-danger">清除所有记录</button>
+                        <button id="exportBtn" class="btn btn-primary">导出记录</button>
+                        <button id="importBtn" class="btn btn-secondary">导入记录</button>
+                        <input type="file" id="importFile" accept=".json" style="display: none;">
+                    </div>
+
+                    <div class="filters">
+                        <h2>筛选</h2>
+                        <label>
+                            <input type="checkbox" id="filterProvince" checked> 按省份显示
+                        </label>
+                        <label>
+                            <input type="checkbox" id="filterCity"> 按城市显示
+                        </label>
+                        <label>
+                            <input type="checkbox" id="filterCounty"> 按县级显示
+                        </label>
+                    </div>
+
+                    <div class="details">
+                        <h2>详细信息</h2>
+                        <div id="detailsContent">
+                            <p>点击地图上的区域查看详细信息</p>
+                        </div>
+                    </div>
+
+                    <div class="visited-list">
+                        <h2>已访问列表</h2>
+                        <div id="visitedListContent">
+                            <p>暂无记录</p>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="china-regions-data.js"></script>
+    <script src="data.js"></script>
+    <script src="map.js"></script>
+</body>
+</html>

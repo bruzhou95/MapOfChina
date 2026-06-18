@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Example China Map SVG -->
+<!-- This is a simplified example showing the proper SVG structure -->
+<!-- Replace with your actual map SVG -->
+
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid meet" width="100%" height="100%">
+    <defs>
+        <style>
+            path { fill: #e8f4f8; stroke: #999; stroke-width: 0.5; }
+            path:hover { fill: #b3dfe8; }
+            path.visited { fill: #667eea; stroke: #5568d3; }
+            path.visited:hover { fill: #5568d3; }
+        </style>
+    </defs>
+
+    <!-- 北京 Beijing -->
+    <path id="beijing" d="M 800,200 L 850,200 L 850,250 L 800,250 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 天津 Tianjin -->
+    <path id="tianjin" d="M 850,200 L 900,200 L 900,250 L 850,250 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 河北 Hebei -->
+    <path id="hebei" d="M 750,250 L 900,250 L 900,350 L 750,350 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 山东 Shandong -->
+    <path id="shandong" d="M 800,350 L 950,350 L 950,450 L 800,450 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 河南 Henan -->
+    <path id="henan" d="M 700,350 L 800,350 L 800,450 L 700,450 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 江苏 Jiangsu -->
+    <path id="jiangsu" d="M 800,450 L 900,450 L 900,550 L 800,550 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 浙江 Zhejiang -->
+    <path id="zhejiang" d="M 850,550 L 950,550 L 950,650 L 850,650 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 安徽 Anhui -->
+    <path id="anhui" d="M 700,450 L 800,450 L 800,550 L 700,550 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 湖北 Hubei -->
+    <path id="hubei" d="M 600,450 L 700,450 L 700,550 L 600,550 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 湖南 Hunan -->
+    <path id="hunan" d="M 600,550 L 700,550 L 700,650 L 600,650 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 广东 Guangdong -->
+    <path id="guangdong" d="M 650,650 L 800,650 L 800,750 L 650,750 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 福建 Fujian -->
+    <path id="fujian" d="M 850,650 L 950,650 L 950,750 L 850,750 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 上海 Shanghai -->
+    <path id="shanghai" d="M 900,450 L 920,450 L 920,470 L 900,470 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 辽宁 Liaoning -->
+    <path id="liaoning" d="M 750,100 L 850,100 L 850,200 L 750,200 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 吉林 Jilin -->
+    <path id="jilin" d="M 800,50 L 900,50 L 900,150 L 800,150 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 黑龙江 Heilongjiang -->
+    <path id="heilongjiang" d="M 850,0 L 950,0 L 950,100 L 850,100 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 内蒙古 Inner Mongolia -->
+    <path id="neimenggu" d="M 500,150 L 700,150 L 700,250 L 500,250 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 山西 Shanxi -->
+    <path id="shanxi" d="M 650,250 L 750,250 L 750,350 L 650,350 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 陕西 Shaanxi -->
+    <path id="shaanxi" d="M 550,350 L 650,350 L 650,450 L 550,450 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 甘肃 Gansu -->
+    <path id="gansu" d="M 400,250 L 550,250 L 550,350 L 400,350 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 青海 Qinghai -->
+    <path id="qinghai" d="M 350,200 L 450,200 L 450,300 L 350,300 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 新疆 Xinjiang -->
+    <path id="xinjiang" d="M 100,200 L 350,200 L 350,400 L 100,400 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 西藏 Tibet -->
+    <path id="tibet" d="M 300,350 L 500,350 L 500,500 L 300,500 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 四川 Sichuan -->
+    <path id="sichuan" d="M 500,450 L 600,450 L 600,550 L 500,550 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 云南 Yunnan -->
+    <path id="yunnan" d="M 450,550 L 550,550 L 550,700 L 450,700 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 贵州 Guizhou -->
+    <path id="guizhou" d="M 550,550 L 650,550 L 650,650 L 550,650 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 宁夏 Ningxia -->
+    <path id="ningxia" d="M 450,300 L 550,300 L 550,350 L 450,350 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 江西 Jiangxi -->
+    <path id="jiangxi" d="M 750,550 L 850,550 L 850,650 L 750,650 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 广西 Guangxi -->
+    <path id="guangxi" d="M 600,650 L 750,650 L 750,750 L 600,750 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 贵州 Guizhou -->
+    <path id="guizhou2" d="M 550,550 L 650,550 L 650,650 L 550,650 Z" fill="#e8f4f8" stroke="#999" stroke-width="1"/>
+
+    <!-- 其他备用区域（可自定义） -->
+
+    <!-- 图例 Legend -->
+    <g transform="translate(50, 850)">
+        <rect width="250" height="120" fill="white" stroke="#999" stroke-width="1" rx="5"/>
+        
+        <text x="10" y="20" font-size="14" font-weight="bold">图例 Legend</text>
+        
+        <rect x="10" y="30" width="20" height="20" fill="#e8f4f8" stroke="#999"/>
+        <text x="35" y="45" font-size="12">未访问 Unvisited</text>
+        
+        <rect x="10" y="60" width="20" height="20" fill="#667eea" stroke="#5568d3"/>
+        <text x="35" y="75" font-size="12">已访问 Visited</text>
+        
+        <text x="10" y="105" font-size="10" fill="#666">点击地区标记访问</text>
+    </g>
+
+    <!-- 标题 Title -->
+    <text x="500" y="30" font-size="24" font-weight="bold" text-anchor="middle" fill="#333">中国地图 - 旅游记录</text>
+</svg>
