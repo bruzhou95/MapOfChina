@@ -101,7 +101,7 @@
             font-family: monospace;
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -159,7 +159,18 @@
     <script>
         let excelData = null;
 
+        // Check if XLSX library is loaded
+        function checkXLSX() {
+            if (typeof XLSX === 'undefined') {
+                showMessage('error', '✗ XLSX 库加载失败。请检查网络连接，或稍后重试。');
+                return false;
+            }
+            return true;
+        }
+
         document.getElementById('excelFile').addEventListener('change', function(e) {
+            if (!checkXLSX()) return;
+            
             const file = e.target.files[0];
             if (!file) return;
 
@@ -184,6 +195,8 @@
         });
 
         function convertToJson() {
+            if (!checkXLSX()) return;
+            
             if (!excelData || excelData.length === 0) {
                 showMessage('error', '✗ 请先上传 Excel 文件');
                 return;
