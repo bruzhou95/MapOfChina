@@ -25,7 +25,8 @@ class ChinaMap {
         if (sidebarHidden) {
             document.querySelector('.content').classList.add('sidebar-hidden');
         }
-        
+
+        await mapData.ready;
         await this.loadMap();
         console.log('loadMap() completed');
         this.updateUI();
@@ -42,11 +43,6 @@ class ChinaMap {
             document.getElementById('importFile').click();
         });
         document.getElementById('importFile').addEventListener('change', (e) => this.importData(e));
-
-        // Filters
-        document.getElementById('filterProvince').addEventListener('change', () => this.updateMapView());
-        document.getElementById('filterCity').addEventListener('change', () => this.updateMapView());
-        document.getElementById('filterCounty').addEventListener('change', () => this.updateMapView());
 
         // Drag to pan when zoomed
         this.mapContainer.addEventListener('mousedown', (e) => this.startPan(e));
@@ -86,7 +82,7 @@ class ChinaMap {
         
         // Center horizontally, offset vertically to show top part of map (northwest China)
         const offsetX = (containerWidth - scaledWidth) / 2 + 150; // Add 150px to shift right
-        const offsetY = 550; // Offset to show top part of map
+        const offsetY = 20; // Offset to show top part of map
 
         this.currentZoom = fitZoom;
         this.offsetX = offsetX;
@@ -102,20 +98,39 @@ class ChinaMap {
     handleZoom(event) {
         event.preventDefault();
         
-        // Determine zoom direction
-        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1; // Scroll down = zoom out, scroll up = zoom in
-        this.currentZoom *= zoomFactor;
-        
-        // Limit zoom levels (0.5x to 3x)
-        this.currentZoom = Math.max(0.5, Math.min(3, this.currentZoom));
-        
-        // Apply zoom to SVG with offset
+        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+        const prevZoom = this.currentZoom;
+        this.currentZoom = Math.max(0.5, Math.min(3, this.currentZoom * zoomFactor));
+
+        // Keep the point under the cursor stationary while zooming
+        const rect = this.mapContainer.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+        const zoomRatio = this.currentZoom / prevZoom;
+        this.offsetX = mouseX - zoomRatio * (mouseX - this.offsetX);
+        this.offsetY = mouseY - zoomRatio * (mouseY - this.offsetY);
+        this.clampOffset();
+
         const svg = this.mapContainer.querySelector('svg');
         if (svg) {
             svg.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.currentZoom})`;
             svg.style.transformOrigin = 'top left';
             svg.style.transition = 'transform 0.1s ease-out';
         }
+    }
+
+    clampOffset() {
+        const svg = this.mapContainer.querySelector('svg');
+        if (!svg) return;
+        const svgW = parseFloat(svg.getAttribute('width'))  || 1801;
+        const svgH = parseFloat(svg.getAttribute('height')) || 1924.75;
+        const scaledW = svgW * this.currentZoom;
+        const scaledH = svgH * this.currentZoom;
+        const cW = this.mapContainer.clientWidth;
+        const cH = this.mapContainer.clientHeight;
+        const margin = 120; // minimum visible pixels of map that must stay on screen
+        this.offsetX = Math.max(margin - scaledW, Math.min(cW - margin, this.offsetX));
+        this.offsetY = Math.max(margin - scaledH, Math.min(cH - margin, this.offsetY));
     }
 
     resetZoom() {
@@ -154,6 +169,7 @@ class ChinaMap {
         // Apply transform
         const svg = this.mapContainer.querySelector('svg');
         if (svg) {
+            this.clampOffset();
             svg.style.transform = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.currentZoom})`;
             svg.style.transition = 'none';
         }
@@ -193,6 +209,7 @@ class ChinaMap {
                 this.mapContainer.innerHTML = svgText;
                 this.svgLoaded = true;
                 console.log('SVG injected into container');
+                this.reorderSvgLayers();
                 this.setupZoomListener();
                 this.fitMapToContainer();
                 this.setupMapInteractions();
@@ -222,6 +239,45 @@ class ChinaMap {
         `;
     }
 
+    reorderSvgLayers() {
+        const svg = this.mapContainer.querySelector('svg');
+        if (!svg) return;
+
+        // Collect region paths and group by immediate parent
+        const groupMap = new Map(); // parent element → [paths]
+        svg.querySelectorAll('path[id], path[data-id], path[data-name]').forEach(path => {
+            const id = path.getAttribute('id') || path.getAttribute('data-id') || path.getAttribute('data-name');
+            if (!id) return;
+            const parent = path.parentElement;
+            if (!groupMap.has(parent)) groupMap.set(parent, []);
+            groupMap.get(parent).push(path);
+        });
+
+        // Within each parent: county (1) first/bottom, province (3) last/top (visible overlay)
+        groupMap.forEach((paths, parent) => {
+            paths.sort((a, b) => {
+                const idA = a.getAttribute('id') || a.getAttribute('data-id') || '';
+                const idB = b.getAttribute('id') || b.getAttribute('data-id') || '';
+                return mapData.getGovernanceLevel(idA) - mapData.getGovernanceLevel(idB);
+            });
+            paths.forEach(p => parent.appendChild(p));
+        });
+
+        // Re-order groups: county-group first/bottom, province-group last/top
+        const parents = Array.from(groupMap.keys());
+        if (parents.length > 1) {
+            const commonParent = parents[0].parentElement;
+            if (commonParent && parents.every(p => p.parentElement === commonParent)) {
+                parents.sort((a, b) => {
+                    const minGovA = Math.min(...groupMap.get(a).map(p => mapData.getGovernanceLevel(p.getAttribute('id') || p.getAttribute('data-id') || '')));
+                    const minGovB = Math.min(...groupMap.get(b).map(p => mapData.getGovernanceLevel(p.getAttribute('id') || p.getAttribute('data-id') || '')));
+                    return minGovA - minGovB; // county group first, province group last (on top)
+                });
+                parents.forEach(g => commonParent.appendChild(g));
+            }
+        }
+    }
+
     setupMapInteractions() {
         const svg = this.mapContainer.querySelector('svg');
         if (!svg) return;
@@ -249,47 +305,208 @@ class ChinaMap {
                     this.showRegionInfo(regionId, path);
                 });
 
-                this.regionsIndex[regionId] = path;
+                // Store ALL paths per ID (SVG often has duplicate IDs for fill + border layers)
+                if (!this.regionsIndex[regionId]) this.regionsIndex[regionId] = [];
+                this.regionsIndex[regionId].push(path);
 
-                // Update visual state if already visited
+                // Restore visual state if already visited
                 if (mapData.isVisited(regionId)) {
-                    this.markRegionVisited(path);
+                    this.updateRegionVisual(path, mapData.getGovernanceLevel(regionId));
                 }
+            }
+        });
+
+        this.buildSvgHierarchyFallback();
+    }
+
+    buildSvgHierarchyFallback() {
+        // 1) Best source: <metadata id="hierarchy"> JSON embedded by the SVG editor
+        const metaEl = this.mapContainer.querySelector('metadata#hierarchy');
+        if (metaEl && metaEl.textContent.trim()) {
+            try {
+                const { countyToCity, cityToProvince } = JSON.parse(metaEl.textContent);
+                // Merge into mapData hierarchy maps
+                Object.assign(mapData.countyToCity, countyToCity);
+                Object.assign(mapData.cityToProvince, cityToProvince);
+                // Rebuild reverse maps from the imported data
+                Object.entries(countyToCity).forEach(([county, city]) => {
+                    if (!mapData.cityCounties[city]) mapData.cityCounties[city] = [];
+                    if (!mapData.cityCounties[city].includes(county))
+                        mapData.cityCounties[city].push(county);
+                });
+                Object.entries(cityToProvince).forEach(([city, prov]) => {
+                    if (!mapData.provinceCities[prov]) mapData.provinceCities[prov] = [];
+                    if (!mapData.provinceCities[prov].includes(city))
+                        mapData.provinceCities[prov].push(city);
+                });
+                console.log(`Hierarchy loaded from SVG metadata: ${Object.keys(countyToCity).length} counties, ${Object.keys(cityToProvince).length} cities`);
+                return;
+            } catch (e) {
+                console.warn('SVG metadata hierarchy parse failed, trying data-parent attributes:', e);
+            }
+        }
+
+        // 2) Second-best: data-parent attributes set by the SVG editor
+        const pathsWithParent = this.mapContainer.querySelectorAll('[data-parent]');
+        if (pathsWithParent.length > 0) {
+            pathsWithParent.forEach(el => {
+                const regionId = el.getAttribute('id');
+                const parentId = el.getAttribute('data-parent');
+                if (!regionId || !parentId) return;
+                const level = mapData.getGovernanceLevel(regionId);
+                if (level === 1) {
+                    mapData.countyToCity[regionId] = parentId;
+                    if (!mapData.cityCounties[parentId]) mapData.cityCounties[parentId] = [];
+                    if (!mapData.cityCounties[parentId].includes(regionId))
+                        mapData.cityCounties[parentId].push(regionId);
+                } else if (level === 2) {
+                    mapData.cityToProvince[regionId] = parentId;
+                    if (!mapData.provinceCities[parentId]) mapData.provinceCities[parentId] = [];
+                    if (!mapData.provinceCities[parentId].includes(regionId))
+                        mapData.provinceCities[parentId].push(regionId);
+                }
+            });
+            console.log(`Hierarchy loaded from SVG data-parent attributes: ${pathsWithParent.length} paths`);
+            return;
+        }
+
+        // 3) Fallback: infer from SVG group structure
+        const pathsByParent = new Map();
+        Object.entries(this.regionsIndex).forEach(([id, paths]) => {
+            const el = Array.isArray(paths) ? paths[0] : paths;
+            if (!el) return;
+            const parent = el.parentElement;
+            if (!pathsByParent.has(parent)) pathsByParent.set(parent, []);
+            pathsByParent.get(parent).push(id);
+        });
+
+        pathsByParent.forEach(ids => {
+            const provIds  = ids.filter(id => mapData.getGovernanceLevel(id) === 3);
+            const cityIds  = ids.filter(id => mapData.getGovernanceLevel(id) === 2);
+            const countyIds = ids.filter(id => mapData.getGovernanceLevel(id) === 1);
+
+            // Map unparented counties to the single city in the same group
+            if (cityIds.length === 1) {
+                const cityId = cityIds[0];
+                countyIds.forEach(countyId => {
+                    if (mapData.getParentId(countyId)) return;
+                    mapData.countyToCity[countyId] = cityId;
+                    if (!mapData.cityCounties[cityId]) mapData.cityCounties[cityId] = [];
+                    if (!mapData.cityCounties[cityId].includes(countyId))
+                        mapData.cityCounties[cityId].push(countyId);
+                });
+            }
+
+            // Map unparented cities to the single province in the same group
+            if (provIds.length === 1) {
+                const provId = provIds[0];
+                cityIds.forEach(cityId => {
+                    if (mapData.getParentId(cityId)) return;
+                    mapData.cityToProvince[cityId] = provId;
+                    if (!mapData.provinceCities[provId]) mapData.provinceCities[provId] = [];
+                    if (!mapData.provinceCities[provId].includes(cityId))
+                        mapData.provinceCities[provId].push(cityId);
+                });
             }
         });
     }
 
     handleRegionClick(regionId, pathElement) {
         mapData.toggleVisit(regionId);
-        
-        if (mapData.isVisited(regionId)) {
-            this.markRegionVisited(pathElement);
+        const isNowVisited = mapData.isVisited(regionId);
+        if (isNowVisited) {
+            this.updateRegionVisual(pathElement, mapData.getGovernanceLevel(regionId));
         } else {
-            this.markRegionUnvisited(pathElement);
+            this.updateRegionVisual(pathElement, 0);
         }
-
+        this.propagateVisit(regionId, isNowVisited);
+        this.showRegionInfo(regionId, pathElement);
         this.updateUI();
     }
 
+    propagateVisit(regionId, isNowVisited) {
+        const parentId = mapData.getParentId(regionId);
+        if (!parentId) return;
+
+        if (isNowVisited) {
+            // Mark parent whenever any child is marked
+            if (!mapData.isVisited(parentId)) {
+                mapData.addVisit(parentId);
+                this.updateRegionVisualAll(parentId, mapData.getGovernanceLevel(parentId));
+                this.propagateVisit(parentId, true);
+            }
+        } else {
+            // Unmark parent only when no children remain visited
+            if (mapData.isVisited(parentId) && !mapData.hasAnyChildVisited(parentId)) {
+                mapData.removeVisit(parentId);
+                this.updateRegionVisualAll(parentId, 0);
+                this.propagateVisit(parentId, false);
+            }
+        }
+    }
+
+    updateRegionVisual(pathElement, level) {
+        pathElement.classList.remove('visited-level1', 'visited-level2', 'visited-level3');
+        if (level === 1) pathElement.classList.add('visited-level1');
+        else if (level === 2) pathElement.classList.add('visited-level2');
+        else if (level === 3) pathElement.classList.add('visited-level3');
+    }
+
+    // Update all SVG paths registered under a given regionId (handles duplicate IDs)
+    updateRegionVisualAll(regionId, level) {
+        const paths = this.regionsIndex[regionId];
+        if (!paths) return;
+        paths.forEach(p => this.updateRegionVisual(p, level));
+    }
+
     markRegionVisited(pathElement) {
-        pathElement.classList.add('visited');
-        pathElement.classList.remove('visited-partial');
+        this.updateRegionVisual(pathElement, 1);
     }
 
     markRegionUnvisited(pathElement) {
-        pathElement.classList.remove('visited');
-        pathElement.classList.remove('visited-partial');
+        this.updateRegionVisual(pathElement, 0);
     }
 
     showRegionInfo(regionId, pathElement) {
         const regionName = mapData.getRegionName(regionId);
         const isVisited = mapData.isVisited(regionId);
-        
+        const govLevel = mapData.getGovernanceLevel(regionId);
+        const govLabels = { 1: '县', 2: '市', 3: '省' };
+        const govLabel = govLabels[govLevel];
+
+        // Build parent chain
+        const chain = [{ id: regionId, name: regionName, level: govLevel }];
+        let cur = regionId;
+        while (true) {
+            const parentId = mapData.getParentId(cur);
+            if (!parentId) break;
+            chain.push({ id: parentId, name: mapData.getRegionName(parentId), level: mapData.getGovernanceLevel(parentId) });
+            cur = parentId;
+        }
+
+        // Render parent chain (from current region up to province)
+        let chainHtml = '';
+        if (chain.length > 1) {
+            chainHtml = '<div class="region-chain">';
+            chain.forEach((item, i) => {
+                const label = govLabels[item.level] || '';
+                const visited = mapData.isVisited(item.id);
+                const indent = `margin-left:${i * 12}px`;
+                if (i === 0) {
+                    chainHtml += `<div class="chain-item chain-self" style="${indent}">▶ [${label}] ${item.name}${visited ? ' ✓' : ''}</div>`;
+                } else {
+                    chainHtml += `<div class="chain-item chain-parent" style="${indent}">↑ [${label}] ${item.name}${visited ? ' ✓' : ''}</div>`;
+                }
+            });
+            chainHtml += '</div>';
+        }
+
         const detailsContent = document.getElementById('detailsContent');
         detailsContent.innerHTML = `
             <div>
-                <p><strong>地区：</strong> ${regionName}</p>
-                <p><strong>状态：</strong> ${isVisited ? '✓ 已访问' : '未访问'}</p>
+                <p><strong>${regionName}</strong> <span style="color:#888">[${govLabel}]</span></p>
+                <p><strong>状态：</strong> ${isVisited ? '<span style="color:#667eea">✓ 已访问</span>' : '未访问'}</p>
+                ${chainHtml}
                 <p style="font-size: 12px; color: #999; margin-top: 10px;">
                     点击以${isVisited ? '取消' : '标记'}访问
                 </p>
@@ -334,16 +551,14 @@ class ChinaMap {
 
         let html = '';
         visitedList.forEach(item => {
-            const typeDisplay = {
-                'province': '省份',
-                'city': '城市',
-                'county': '县级'
-            }[item.type] || item.type;
+            const govDisplay = { 1: '县', 2: '市', 3: '省' }[item.govLevel] || '';
 
             html += `
-                <div class="visit-item" data-region-id="${item.regionId}">
+                <div class="visit-item" data-region-id="${item.regionId}" data-type="${item.type}">
+                    <span class="visit-item-level level-${item.govLevel}"></span>
                     <div class="visit-item-name">${item.name}</div>
-                    <div class="visit-item-type">${typeDisplay}</div>
+                    <div class="visit-item-type">${govDisplay}</div>
+                    <button class="visit-item-remove" data-region-id="${item.regionId}" data-type="${item.type}" title="移除">✕</button>
                 </div>
             `;
         });
@@ -352,13 +567,26 @@ class ChinaMap {
 
         // Add click listeners to visited items
         listContent.querySelectorAll('.visit-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
+                if (e.target.classList.contains('visit-item-remove')) return;
                 const regionId = item.getAttribute('data-region-id');
-                const pathElement = this.regionsIndex[regionId];
-                if (pathElement) {
-                    pathElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    pathElement.style.animation = 'pulse 0.6s ease-in-out';
+                const pathEl = (this.regionsIndex[regionId] || [])[0];
+                if (pathEl) {
+                    pathEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    pathEl.style.animation = 'pulse 0.6s ease-in-out';
                 }
+            });
+        });
+
+        // Add remove button listeners
+        listContent.querySelectorAll('.visit-item-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const regionId = btn.getAttribute('data-region-id');
+                const type = btn.getAttribute('data-type');
+                mapData.removeVisit(regionId, type);
+                this.updateRegionVisualAll(regionId, 0);
+                this.propagateVisit(regionId, false);
+                this.updateUI();
             });
         });
     }
@@ -405,10 +633,7 @@ class ChinaMap {
                 // Update visual states for imported data
                 mapData.visitedRegions.forEach(item => {
                     const [regionId] = item.split(':');
-                    const pathElement = this.regionsIndex[regionId];
-                    if (pathElement) {
-                        this.markRegionVisited(pathElement);
-                    }
+                    this.updateRegionVisualAll(regionId, mapData.getGovernanceLevel(regionId));
                 });
 
                 this.updateUI();

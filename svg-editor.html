@@ -218,7 +218,20 @@
         </div>
 
         <div style="grid-column: 1 / -1;">
-            <h2>💾 第 4 步：完成</h2>
+            <h2>� 第 4 步：上传行政层级 CSV</h2>
+            <p style="font-size:13px;color:#555;">上传包含 <strong>level 3 (省) / level 2 (市) / level 1 (县)</strong> 三列的 CSV 文件。
+            系统将自动填充空白单元格、建立父子关系，并将层级信息写入 SVG。</p>
+            <label for="csvFile">选择层级 CSV 文件：</label>
+            <input type="file" id="csvFile" accept=".csv" />
+            <div id="csvStatus"></div>
+            <div class="button-group" id="hierarchyButtons" style="display:none; margin-top:6px;">
+                <button onclick="applyHierarchyToSvg()" style="background:#4caf50;">✓ 将层级关系写入 SVG</button>
+            </div>
+            <div id="hierarchyStats" style="margin-top:6px; font-size:12px; color:#555;"></div>
+        </div>
+
+        <div style="grid-column: 1 / -1;">
+            <h2>💾 第 5 步：完成</h2>
             <div class="button-group">
                 <button onclick="applySvg()" style="background: #4caf50;">✓ 应用更改</button>
                 <button onclick="downloadSvg()" style="background: #2196F3;">⬇️ 下载修改后的 SVG</button>
@@ -478,6 +491,155 @@
             const messageDiv = document.getElementById('message');
             messageDiv.innerHTML = `<div class="error">${msg}</div>`;
             setTimeout(() => { messageDiv.innerHTML = ''; }, 5000);
+        }
+
+        // ── Hierarchy CSV upload ──────────────────────────────────────────────
+
+        let hierarchyData = null;
+
+        document.getElementById('csvFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                hierarchyData = parseCsvHierarchy(event.target.result);
+                const { provinceCodes, cityCodes, countyCodes } = hierarchyData;
+                document.getElementById('csvStatus').innerHTML =
+                    `<div class="success">✓ 已加载：${provinceCodes.size} 个省，${cityCodes.size} 个市，${countyCodes.size} 个县/区</div>`;
+                document.getElementById('hierarchyButtons').style.display = 'flex';
+                // Show a few sample province codes
+                document.getElementById('hierarchyStats').textContent =
+                    '省份代码示例：' + Array.from(provinceCodes).slice(0, 6).join(', ');
+            };
+            reader.readAsText(file);
+        });
+
+        /**
+         * Parse the 3-column CSV (level3=province, level2=city, level1=county).
+         * Empty cells inherit the value from the previous row (continuation format).
+         */
+        function parseCsvHierarchy(csvText) {
+            const lines = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n');
+            const dataLines = lines.slice(1); // skip header
+
+            const countyToCity   = {}; // countyCode  → cityCode     (raw 6-digit)
+            const cityToProvince = {}; // cityCode    → provinceCode (raw 6-digit)
+            const provinceCodes  = new Set();
+            const cityCodes      = new Set();
+            const countyCodes    = new Set();
+
+            let currentProvince = '';
+            let currentCity     = '';
+
+            for (const line of dataLines) {
+                if (!line.trim()) continue;
+                const cols = line.split(',').map(c => c.trim());
+                const l3 = cols[0]; // province
+                const l2 = cols[1]; // city
+                const l1 = cols[2]; // county
+
+                if (l3) currentProvince = l3;
+                if (l2) currentCity     = l2;
+
+                if (currentProvince) provinceCodes.add(currentProvince);
+
+                if (currentCity) {
+                    cityCodes.add(currentCity);
+                    if (currentProvince) cityToProvince[currentCity] = currentProvince;
+                }
+
+                if (l1) {
+                    countyCodes.add(l1);
+                    if (currentCity)    countyToCity[l1]  = currentCity;
+                }
+            }
+
+            return { countyToCity, cityToProvince, provinceCodes, cityCodes, countyCodes };
+        }
+
+        /**
+         * For every path whose ID contains a 6-digit code:
+         *  - Province → rename id to "xxxxxx-3", set data-level="3"
+         *  - City      → rename id to "xxxxxx-2", set data-level="2", data-parent="provCode-3"
+         *  - County    → keep id as "xxxxxx",     set data-level="1", data-parent="cityCode-2"
+         * Then embed the full hierarchy as <metadata id="hierarchy"> JSON in the SVG.
+         */
+        function applyHierarchyToSvg() {
+            if (!svgDoc)       { showError('请先上传 SVG 文件');         return; }
+            if (!hierarchyData){ showError('请先上传层级 CSV 文件');     return; }
+
+            const { countyToCity, cityToProvince, provinceCodes, cityCodes, countyCodes } = hierarchyData;
+            const paths = svgDoc.querySelectorAll('path, polygon, circle, rect');
+            let provinces = 0, cities = 0, counties = 0, unmatched = 0;
+
+            paths.forEach(path => {
+                const currentId = path.getAttribute('id') || '';
+                const m = currentId.match(/(\d{6})/);
+                if (!m) { unmatched++; return; }
+                const code = m[1];
+
+                if (provinceCodes.has(code)) {
+                    const newId = code + '-3';
+                    path.setAttribute('id', newId);
+                    path.setAttribute('data-level', '3');
+                    path.removeAttribute('data-parent');
+                    renameInPathMap(currentId, newId, path);
+                    provinces++;
+
+                } else if (cityCodes.has(code)) {
+                    const newId = code + '-2';
+                    path.setAttribute('id', newId);
+                    path.setAttribute('data-level', '2');
+                    const parentCode = cityToProvince[code];
+                    if (parentCode) path.setAttribute('data-parent', parentCode + '-3');
+                    else            path.removeAttribute('data-parent');
+                    renameInPathMap(currentId, newId, path);
+                    cities++;
+
+                } else if (countyCodes.has(code)) {
+                    const newId = code; // no suffix for counties
+                    path.setAttribute('id', newId);
+                    path.setAttribute('data-level', '1');
+                    const parentCode = countyToCity[code];
+                    if (parentCode) path.setAttribute('data-parent', parentCode + '-2');
+                    else            path.removeAttribute('data-parent');
+                    if (currentId !== newId) renameInPathMap(currentId, newId, path);
+                    counties++;
+
+                } else {
+                    unmatched++;
+                }
+            });
+
+            // Embed compact hierarchy JSON in <metadata id="hierarchy">
+            let metadata = svgDoc.querySelector('metadata#hierarchy');
+            if (!metadata) {
+                metadata = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'metadata');
+                metadata.setAttribute('id', 'hierarchy');
+                const svgEl = svgDoc.querySelector('svg');
+                svgEl.insertBefore(metadata, svgEl.firstChild);
+            }
+            // Store with suffixes already applied so map.js can use IDs directly
+            metadata.textContent = JSON.stringify({
+                countyToCity: Object.fromEntries(
+                    Object.entries(countyToCity).map(([k, v]) => [k, v + '-2'])
+                ),
+                cityToProvince: Object.fromEntries(
+                    Object.entries(cityToProvince).map(([k, v]) => [k + '-2', v + '-3'])
+                )
+            });
+
+            applySvg();
+            renderPathList();
+            showSuccess(`✓ 层级已写入 SVG：${provinces} 省，${cities} 市，${counties} 县/区（${unmatched} 个未匹配路径）`);
+        }
+
+        function renameInPathMap(oldId, newId, element) {
+            if (oldId === newId || !pathMap.has(oldId)) return;
+            const info = pathMap.get(oldId);
+            info.displayName = newId;
+            pathMap.delete(oldId);
+            pathMap.set(newId, info);
         }
     </script>
 </body>
