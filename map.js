@@ -322,11 +322,20 @@ class ChinaMap {
                            path.getAttribute('data-name');
             
             if (regionId) {
-                path.style.cursor = 'pointer';
-                path.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.handleRegionClick(regionId, path);
-                });
+                const govLevel = mapData.getGovernanceLevel(regionId);
+                const isClickable = govLevel === 1;
+
+                if (isClickable) {
+                    path.style.cursor = 'pointer';
+                    path.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.handleRegionClick(regionId, path);
+                    });
+                } else {
+                    path.style.cursor = 'default';
+                    path.style.pointerEvents = 'none';
+                }
+
                 path.addEventListener('mouseenter', () => {
                     this.showRegionInfo(regionId, path);
                 });

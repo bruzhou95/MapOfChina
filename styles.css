@@ -459,6 +459,11 @@ svg path:hover {
     stroke-width: 1;
 }
 
+svg path[data-level="2"]:hover,
+svg path[data-level="3"]:hover {
+    fill: none;
+}
+
 /* Province and city paths sit on top as transparent overlays.
    pointer-events:none lets clicks pass through to county paths below. */
 svg path[data-level="2"],
